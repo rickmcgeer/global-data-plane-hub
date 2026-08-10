@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <base href="/hub/bearborg/">
+  <title>Welcome to BearBorg</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1, h2 {
+      color: #007acc;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 1em;
+      border-radius: 4px;
+      position: relative;
+      overflow-x: auto;
+    }
+    .copy-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #007acc;
+      color: white;
+      border: none;
+      padding: 0.3em 0.6em;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8em;
+    }
+    img {
+      max-width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    a {
+      color: #007acc;
+    }
+    hr {
+      margin: 2rem 0;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="top">Welcome to BearBorg</h1>
+  <p>This JupyterLab environment includes integrated access to multiple advanced LLMs using <strong>JupyterAI</strong>.</p>
+
+  <h2>Authentication</h2>
+  <p>You are already authenticated. The following environment variables are set automatically at login:</p>
+  <ul>
+    <li><code>LITELLM_API_KEY</code>: your API key for the BearBorg model proxy</li>
+    <li><code>LITELLM_SERVER</code>: the URL of the BearBorg LiteLLM proxy server</li>
+  </ul>
+
+  <h2>Using JupyterAI For the First Time</h2>
+  <p>JupyterAI features a chatbot in the side panel and an ability to run AI magic commands in Jupyter Notebooks.</p>
+  <p>The first time you click on the JupyterAI extension icon on the left-hand panel:</p>
+  <img src="jupyter-ai-1.png" alt="JupyterAI Extension Button">
+  <p>When you click it, the settings panel will come up.</p>
+  <img src="jupyter-ai-2.png" alt="JupyterAI Initial Panel">
+  <p>Enter the settings, and then select BearBorg models from the pulldowns for "Language Model" and "Embeddings Model". We recommend a full-featured model (e.g., gpt-4o) for the Language Model and a lightweight model (e.g., gpt-4o-mini) for the Embeddings Model.</p>
+  <img src="jupyter-ai-3.png" alt="JupyterAI Settings Panel">
+  <p>Click Save.</p>
+  <p>You're able to return to the settings screen by clicking "Settings" in the JupyterAI panel.</p>
+
+  <h2>Available Models</h2>
+  <p>The following models are available via JupyterAI’s chat, completions, and embeddings interfaces:</p>
+  <ul>
+    <li><code>azure/gpt-4o</code></li>
+    <li><code>azure/gpt-4o-mini</code></li>
+    <li><code>gemini/gemini-1.5-pro</code></li>
+    <li><code>gemini/gemini-2.0-flash-001</code></li>
+  </ul>
+  <p>In magic commands, or if you manually edit the settings file, the available models are:</p>
+  <ul>
+    <li><code>bearborg-embeddings:azure/gpt-4o</code></li>
+    <li><code>bearborg-embeddings:azure/gpt-4o-mini</code></li>
+    <li><code>bearborg-embeddings:gemini/gemini-1.5-pro</code></li>
+    <li><code>bearborg-embeddings:gemini/gemini-2.0-flash-001</code></li>
+    <li><code>bearborg-chats:azure/gpt-4o</code></li>
+    <li><code>bearborg-chats:azure/gpt-4o-mini</code></li>
+    <li><code>bearborg-chats:gemini/gemini-1.5-pro</code></li>
+    <li><code>bearborg-chats:gemini/gemini-2.0-flash-001</code></li>
+    <li><code>bearborg-completions:azure/gpt-4o</code></li>
+    <li><code>bearborg-completions:azure/gpt-4o-mini</code></li>
+    <li><code>bearborg-completions:gemini/gemini-1.5-pro</code></li>
+    <li><code>bearborg-completions:gemini/gemini-2.0-flash-001</code></li>
+  </ul>
+  <p>Other providers and models are available <em>but they require the user to supply
+  their own API key</em>. The BearBorg models have authentication information already built-in.</p>
+
+  <h2>Using with curl and Python</h2>
+  <p>Set the following environment variables and issue requests like this:</p>
+  <div style="position: relative;">
+    <pre><code id="curl-snippet">curl $LITELLM_SERVER/v1/chat/completions -H "Authorization: Bearer $LITELLM_API_KEY" \
+  -H "Content-Type: application/json" -d '{"model": "azure/gpt-4o", "messages": [{"role": "user", "content": "hello"}]}'</code></pre>
+    <button class="copy-button" onclick="copyToClipboard('curl-snippet')">Copy</button>
+  </div>
+
+  <h2>Learn More</h2>
+  <p>This environment uses <a href="https://github.com/jupyterlab/jupyter-ai" target="_blank">JupyterAI</a> to provide its AI capabilities.</p>
+
+  <hr>
+  <p><a href="#top">Back to top ↑</a></p>
+
+  <script>
+    function copyToClipboard(id) {
+      const el = document.getElementById(id);
+      const text = el.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard!');
+      }).catch(err => {
+        console.error('Copy failed', err);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+# Snapshot of the LIVE, deployed Helm release's user-supplied values, pulled
+# via `helm get values jupyter-ai-1 -n jupyter-ai` on 2026-08-10. This is
+# NOT a template you deploy from as-is - it's a record of what's actually
+# running, so it isn't lost, with every secret replaced by a <REDACTED:...>
+# placeholder. See README.md before touching any of this.
+#
+# Release:   jupyter-ai-1 (namespace jupyter-ai)
+# Chart:     jupyterhub-4.0.0 (app version 5.2.1)
+# Revision:  10, deployed 2025-10-23T21:37:23Z
+# Cluster:   jupyter-ai-cluster, project civil-pattern-439416-k1, us-west2-a
+# Hostname:  bearborg.global-data-plane.org
+
+hub:
+  config:
+    Authenticator:
+      admin_users:
+        - mcgeer@berkeley.edu
+        - lutz@berkeley.edu
+        - awschmeder@lbl.gov
+      allow_all: true
+      allow_existing_users: true
+    GoogleOAuthenticator:
+      client_id: 980525895986-2bcrhlsc5ecnlnan8vptku8eaduh4pfq.apps.googleusercontent.com
+      client_secret: "<REDACTED: GCP Console > APIs & Services > Credentials, same OAuth client as client_id above>"
+      hosted_domain:
+        - berkeley.edu
+        - mcgeer.com
+        - lbl.gov
+      oauth_callback_url: https://bearborg.global-data-plane.org/hub/oauth_callback
+    JupyterHub:
+      allow_origin: "*"
+      authenticator_class: oauthenticator.GoogleOAuthenticator
+      disable_check_xsrf: true
+      template_paths:
+        - /etc/jupyterhub/custom_templates
+
+  # Three separate pieces of custom Python glued into the Hub via extraConfig
+  # (order as originally supplied):
+  extraConfig:
+    # Serves configmaps/bearborg-static/index.html (a custom "welcome to
+    # BearBorg" landing page) at /hub/bearborg/.
+    bearborgHandler: |
+      from tornado.web import StaticFileHandler
+
+      class BearBorgHandler(StaticFileHandler):
+        def parse_url_path(self, url_path):
+          if not url_path:
+              return ''
+          return url_path
+
+      c.JupyterHub.extra_handlers = [
+        (r"/bearborg(?:/(.*))?", BearBorgHandler, {
+          "path": "/srv/bearborg/static",
+          "default_filename": "index.html",
+        }),
+      ]
+
+    # THE PIECE TO PRESERVE - registers the Global Data Plane as an
+    # OAuth-protected Hub service at /services/gdp, proxied to
+    # gdp-service.jupyter-ai.svc.cluster.local:5000 (image
+    # rickmcgeer/gdp-sidecar:20251023).
+    gdp-service-config: |
+      c.JupyterHub.load_roles = getattr(c.JupyterHub, "load_roles", [])
+      c.JupyterHub.load_roles.append(
+        {
+          "name": "user",
+          "scopes": [
+            "self",
+            "access:servers",
+            "access:services",
+          ],
+          "users": ["*"],
+        }
+      )
+      c.JupyterHub.load_roles.append(
+        {
+          "name": "gdp-role",
+          "scopes": [
+            "access:services!service=gdp",
+            "self",
+            "read:users",
+            "tokens",
+          ],
+          "services": ["gdp"],
+          "users": ["*"],  # Or [], or None
+        }
+      )
+      print("ROLES LOADED:", c.JupyterHub.load_roles)
+
+      import os
+      c.JupyterHub.services.append(
+        {
+          'name': 'gdp',
+          'url': 'http://gdp-service.jupyter-ai.svc.cluster.local:5000',
+          'api_token': '<REDACTED: kubectl get secret hub -n jupyter-ai>',
+          'oauth_redirect_uri': 'https://bearborg.global-data-plane.org/services/gdp/callback',
+          'oauth_no_confirm': True,
+          'oauth_client_id': 'service-gdp'
+        }
+      )
+
+    # Maps /services/litellm/ to the in-cluster self-hosted LiteLLM proxy
+    # (litellm-service, image ghcr.io/berriai/litellm:main-stable, backed by
+    # postgres-deployment) - a SEPARATE LiteLLM instance from LBNL's
+    # externally-hosted bearborg.berkeley.edu:4433 proxy referenced below.
+    litellm_route: |
+      # This is the key: It maps the public path to the service's root.
+      c.JupyterHub.routes.update({
+          '/services/litellm/': 'litellm',
+      })
+
+    # Pre-spawn hook: on every server start, auto-provisions (or reuses) a
+    # LiteLLM user + API key for the logging-in user against LBNL's EXTERNAL
+    # bearborg.berkeley.edu:4433 proxy (not the in-cluster one above), then
+    # injects LITELLM_API_KEY / OPENAI_API_KEY / OPENAI_API_BASE /
+    # BEARBORG_URL into the singleuser pod's environment. This is what the
+    # old bearborg_ai package's BearBorgProvider (bearborg-jupyter-ai repo,
+    # now abandoned) consumed via those env vars. Also seeds
+    # ~/.local/share/jupyter/jupyter_ai/config.json with the old v2-style
+    # "bearborg-chat:azure/gpt-4o" provider ID (commented out - the actual
+    # config-seeding call is disabled; only the env-var injection runs).
+    #
+    # The hardcoded API_KEY below is a LITELLM MASTER/ADMIN KEY used to call
+    # LBNL's user-provisioning endpoints - NOT a per-user key. Redacted.
+    test_env_config: |
+      import requests
+      import json
+
+      # Configuration
+      LITELLM_SERVER_URL = 'https://bearborg.berkeley.edu:4433' # os.environ['LITE_LLM_SERVER']
+      LITELLM_API_CREATE_USER = f"{LITELLM_SERVER_URL}/user/new"
+      LITELLM_API_ISSUE_KEY = f"{LITELLM_SERVER_URL}/key/generate"
+      LITELLM_API_LIST_USERS = f"{LITELLM_SERVER_URL}/user/list" # <-- THIS IS THE CORRECT ENDPOINT
+      LITELLM_API_GET_USER_INFO = f"{LITELLM_SERVER_URL}/user/info"
+      API_KEY = '<REDACTED: LiteLLM master key for bearborg.berkeley.edu - ask LBNL science-it / check password manager>'
+
+      def get_all_users():
+          """Get all users from the LiteLLM server using the correct endpoint."""
+          response = requests.get(LITELLM_API_LIST_USERS, headers={"Authorization": f"Bearer {API_KEY}"})
+          if response.status_code == 200:
+              response_data = response.json()
+              user_list = response_data.get('users', [])
+              return [(user['user_email'], user['user_id']) for user in user_list]
+          print(f"Error fetching users. Status: {response.status_code}, Response: {response.text}")
+          return []
+
+      def get_user_id(user_email):
+        users = get_all_users()
+        for user in users:
+          if user[0] == user_email:
+            return user[1]
+        return None
+
+      def get_user_info(user_email):
+        user_id  = get_user_id(user_email)
+        if user_id is not None:
+          response = requests.get(f'{LITELLM_API_GET_USER_INFO}?user_id={user_id}', headers={"Authorization": f"Bearer {API_KEY}"})
+          if response.status_code == 200:
+            return response.json()
+          else:
+            response.raise_for_status()
+        else:
+          return None
+
+      def create_litellm_user(user_email):
+        """Create a user on the LiteLLM server."""
+        headers = {
+          "Authorization": f"Bearer {API_KEY}",
+          "Content-Type": "application/json"
+        }
+        response = requests.post(LITELLM_API_CREATE_USER, headers=headers, json={"user_email": user_email})
+        if response.status_code == 200:
+          return response.json()
+        else:
+          response.raise_for_status()
+
+      def issue_litellm_key(userid):
+        """Issue an API key for the LiteLLM user."""
+        headers = {
+          "Authorization": f"Bearer {API_KEY}",
+          "Content-Type": "application/json"
+        }
+        response = requests.post(LITELLM_API_ISSUE_KEY, headers=headers, json={"user_id": userid})
+        if response.status_code == 200:
+          api_key = response.json().get("key")
+          return api_key
+        else:
+          response.raise_for_status()
+
+      def ensure_jupyter_ai_config(spawner, api_key):
+        user_home = "/home/jovyan"
+        config_dir = os.path.join(user_home, ".local/share/jupyter/jupyter_ai")
+        config_file = os.path.join(config_dir, "config.json")
+
+        if os.path.exists(config_file):
+          spawner.log.info("JupyterAI config exists, not overwriting.")
+          return
+
+        if not api_key:
+          spawner.log.warning("API key missing! Using empty config - JupyterAI will likely overwrite.")
+
+        config = {
+          "model_provider_id": "bearborg-chat:azure/gpt-4o",
+          "embeddings_provider_id": "bearborg-embeddings:azure/gpt-4o-mini",
+          "send_with_shift_enter": False,
+          "fields": {},
+          "api_keys": {},
+          "completions_model_provider_id": None,
+          "completions_fields": {},
+          "embeddings_fields": {}
+        }
+
+        os.makedirs(config_dir, exist_ok=True)
+
+        with open(config_file, "w") as f:
+          json_form = json.dumps(config, indent=2)
+          f.write(json_form)
+          spawner.log.info(f"wrote {config_file} with {json_form}")
+
+        uid = 1000 # jovyan
+        gid = 100 # users
+        os.chown(config_file, uid, gid)
+        os.chown(config_dir, uid, gid)
+
+      def my_hook(spawner):
+        print('In my_hook')
+
+        username = spawner.user.name
+        user_id = get_user_id(username)
+        print(f'user id for {username} is {user_id}')
+        if user_id is None:
+          result = create_litellm_user(username)
+          user_id = result["user_id"]
+          print(f'Created user id for {username} {user_id}')
+        key = issue_litellm_key(user_id)
+        if spawner.environment is None:
+          print("setting env vars")
+          spawner.environment = {
+            'LITELLM_SERVER': LITELLM_SERVER_URL,
+            'LITELLM_API_KEY': key,
+            'OPENAI_API_KEY': key,
+            'OPENAI_API_BASE': f"{LITELLM_SERVER_URL}/v1",
+            'BEARBORG_URL': 'https://jupyter-ai.global-data-plane.org/hub/bearborg/'
+          }
+        else:
+          print("setting env vars")
+          spawner.environment['LITELLM_SERVER'] = LITELLM_SERVER_URL
+          spawner.environment['LITELLM_API_KEY'] = key
+          spawner.environment['OPENAI_API_KEY'] = key
+          spawner.environment['OPENAI_API_BASE'] = f"{LITELLM_SERVER_URL}/v1"
+          spawner.environment['BEARBORG_URL'] = 'https://jupyter-ai.global-data-plane.org/hub/bearborg/'
+        # ensure_jupyter_ai_config(spawner, key)
+
+      c.Spawner.pre_spawn_hook = my_hook
+
+  extraVolumeMounts:
+    - mountPath: /srv/bearborg/static
+      name: bearborg-static
+    - mountPath: /etc/jupyterhub/custom_templates
+      name: bearborg-custom-templates
+  extraVolumes:
+    - configMap:
+        name: bearborg-static
+      name: bearborg-static
+    - configMap:
+        name: bearborg-custom-templates
+      name: bearborg-custom-templates
+  services:
+    hello:
+      url: http://hello-world-svc
+    litellm:
+      url: http://litellm-service
+
+proxy:
+  chp:
+    networkPolicy:
+      egress:
+        - to:
+            - podSelector:
+                matchLabels:
+                  app: hello-world
+        - to:
+            - podSelector:
+                matchLabels:
+                  app: litellm-proxy
+  https:
+    enabled: true
+    hosts:
+      - bearborg.global-data-plane.org
+    letsencrypt:
+      contactEmail: rick@mcgeer.com
+  secretToken: "<REDACTED: kubectl get secret hub -n jupyter-ai -o jsonpath='{.data.proxy\\.secretToken}' | base64 -d>"
+  traefik:
+    extraInitContainers:
+      - command:
+          - sh
+          - -c
+          - sleep 60
+        image: busybox:stable
+        name: startup-delay
+
+singleuser:
+  cmd: null
+  image:
+    name: rickmcgeer/jupyter-ai-2
+    pullPolicy: Always
+    tag: d2202507290530
+  profileList:
+    - default: true
+      description: BearBorg with an old base image
+      display_name: BearBorg original
+    - description: Modern data science image (no BearBorg)
+      display_name: Datascience 3.11
+      kubespawner_override:
+        image: quay.io/jupyter/datascience-notebook:2025-07-21
+        image_pull_policy: IfNotPresent
+    - description: Custom Modern BearBorg image with AI support
+      display_name: BearBorg (Custom)
+      kubespawner_override:
+        image: rickmcgeer/jupyter-ai-3:d2202507290530
+        image_pull_policy: Always
