@@ -18,6 +18,27 @@ existed when they were built. This repo exists to reconcile the two: decide
 what here needs to survive a migration to the new architecture, and what's
 safe to drop.
 
+## Decision (2026-08-10): retiring the LiteLLM proxy entirely
+
+Both LiteLLM layers - the in-cluster one and the pre-spawn hook's dependency
+on LBNL's external one - are an artifact of the pre-v3 world, from before
+Jupyter AI had LiteLLM built in natively. Confirmed droppable as one unit:
+Postgres holds nothing but the LiteLLM proxy's own state
+(`POSTGRES_DB`/`USER`/`PASSWORD`, no other consumer connects to it) and the
+Hub itself uses its default sqlite, not Postgres. So the migration drops:
+
+- `litellm-deployment`, `postgres-deployment`, `litellm-service`, the
+  `litellm-secrets` Secret
+- the `litellm_route` extraConfig snippet and the `hub.services.litellm`
+  entry
+- the `test_env_config` pre-spawn hook (`c.Spawner.pre_spawn_hook`) and its
+  per-user key auto-provisioning against `bearborg.berkeley.edu:4433` -
+  every user gets the new architecture's shared Vertex AI default instead
+- the proxy's `litellm-proxy` egress `networkPolicy` rule
+
+`gdp-service` and its Hub service registration (`gdp-service-config`) are
+unaffected - still being preserved.
+
 ## What's actually running
 
 | Resource | Image | Notes |
