@@ -44,7 +44,7 @@ unaffected - still being preserved.
 | Resource | Image | Notes |
 |---|---|---|
 | `hub`, `proxy`, `autohttps`, `user-scheduler` | z2jh 4.0.0 stock | The Hub itself |
-| `gdp-service` | `rickmcgeer/gdp-sidecar:20251023` | **The Global Data Plane - keep this.** Exposed at `/services/gdp` via Hub OAuth. **Not part of the Helm release** - applied separately via raw `kubectl` manifests, captured in [`raw-manifests/gdp-service.yaml`](raw-manifests/gdp-service.yaml). |
+| `gdp-service` | `rickmcgeer/gdp-sidecar:20251023` | **The Global Data Plane - keep this.** Exposed at `/services/gdp` via Hub OAuth. **Not part of the Helm release** - applied separately via raw `kubectl` manifests, captured in [`raw-manifests/gdp-service.yaml`](raw-manifests/gdp-service.yaml). Now also tracked/deployable from `jupyter-ai-deployment/gdp-service/` (templated, applied by that repo's `scripts/deploy.sh`) - this snapshot stays the historical record, that's the live source of truth going forward. |
 | `litellm-deployment` + `postgres-deployment` | `ghcr.io/berriai/litellm:main-stable` | A **second, separate, self-hosted** LiteLLM proxy in-cluster (distinct from LBNL's external `bearborg.berkeley.edu:4433`). Exposed at `/services/litellm/`. |
 | `hello-world-deployment` | `gcr.io/google-samples/hello-app:1.0` | Looks like a leftover smoke test, not load-bearing - not confirmed, don't assume. |
 | singleuser pods | `rickmcgeer/jupyter-ai-2` / `jupyter-ai-3` | Three profiles: "BearBorg original", vanilla Datascience 3.11, "BearBorg (Custom) with AI support". |
